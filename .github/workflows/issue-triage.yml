@@ -1,0 +1,102 @@
+# Puts every new issue in the Exsportia org on Project #2 with Status = Backlog, and turns the
+# issue-form answers into labels (surface/*, sev/*, bug/*, prod). Idempotent: it looks back 3 hours
+# every run, so a missed run is caught by the next one. D359/D369.
+#
+# THIS REPO IS PUBLIC, SO ITS LOGS ARE PUBLIC: log counts only, never titles, bodies or repo names
+# of private issues.
+name: Issue triage
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: issue-triage
+  cancel-in-progress: false
+
+jobs:
+  triage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - id: app
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ vars.EXSPORTIA_OPS_APP_ID }}
+          private-key: ${{ secrets.EXSPORTIA_OPS_APP_KEY }}
+          owner: Exsportia
+
+      - uses: actions/github-script@v7
+        with:
+          github-token: ${{ steps.app.outputs.token }}
+          script: |
+            const PROJECT_ID = 'PVT_kwDOA2Phgc4Bk7Ho';
+            const STATUS_FIELD = 'PVTSSF_lADOA2Phgc4Bk7Hozhjp35M';
+            const BACKLOG = '73dd21df';
+
+            const REPO_SURFACE = {
+              'exsportia-admin': 'surface/vms', 'muay-vms': 'surface/mms', 'web-booking-app': 'surface/wba',
+              'mysportia-booking-web': 'surface/mba', 'react-native-booking-app': 'surface/rn',
+              'react-native-mysportia': 'surface/rnm', 'exsportia-check-in': 'surface/chi',
+              'exsportia-server': 'surface/server', 'exsportia-product': 'surface/infra',
+            };
+            const APP_SURFACE = [
+              ['VMS (', 'surface/vms'], ['MMS (', 'surface/mms'], ['WBA (', 'surface/wba'], ['MBA (', 'surface/mba'],
+              ['RNM (', 'surface/rnm'], ['RN (', 'surface/rn'], ['CHI (', 'surface/chi'],
+              ['Server / API', 'surface/server'], ['Infra / other', 'surface/infra'],
+            ];
+            const SEV = { Critical: 'sev/critical', Major: 'sev/major', Medium: 'sev/medium', Low: 'sev/low' };
+
+            // Answer under a form heading ("### App" … next "###").
+            const section = (body, heading) => {
+              const m = (body || '').match(new RegExp(`### ${heading}\\s*\\n([\\s\\S]*?)(?=\\n### |$)`));
+              const v = m ? m[1].trim() : '';
+              return v === '_No response_' ? '' : v;
+            };
+
+            const since = new Date(Date.now() - 3 * 3600e3).toISOString().slice(0, 19) + 'Z';
+            const found = await github.paginate(github.rest.search.issuesAndPullRequests, {
+              q: `org:Exsportia is:issue is:open created:>=${since}`, per_page: 100,
+            });
+
+            let added = 0, labelled = 0, failed = 0;
+            for (const issue of found) {
+              try {
+                const [owner, repo] = issue.repository_url.split('/').slice(-2);
+                const labels = new Set(issue.labels.map(l => l.name));
+                const want = new Set();
+
+                const app = section(issue.body, 'App');
+                for (const [needle, label] of APP_SURFACE) if (app.includes(needle)) want.add(label);
+                if (![...labels, ...want].some(l => l.startsWith('surface/')) && REPO_SURFACE[repo]) want.add(REPO_SURFACE[repo]);
+
+                const sev = section(issue.body, 'Severity').split(' ')[0];
+                if (SEV[sev]) want.add(SEV[sev]);
+                const kind = section(issue.body, 'Kind');
+                if (kind.startsWith('Logic')) want.add('bug/logic');
+                if (kind.startsWith('UI')) want.add('bug/ui');
+                if (section(issue.body, 'Where').includes('production')) want.add('prod');
+
+                const missing = [...want].filter(l => !labels.has(l));
+                if (missing.length) {
+                  await github.rest.issues.addLabels({ owner, repo, issue_number: issue.number, labels: missing });
+                  labelled++;
+                }
+
+                const r = await github.graphql(`query($id:ID!){node(id:$id){... on Issue{projectItems(first:20){nodes{id project{id}}}}}}`, { id: issue.node_id });
+                if (!r.node.projectItems.nodes.some(n => n.project.id === PROJECT_ID)) {
+                  const a = await github.graphql(`mutation($p:ID!,$c:ID!){addProjectV2ItemById(input:{projectId:$p,contentId:$c}){item{id}}}`, { p: PROJECT_ID, c: issue.node_id });
+                  await github.graphql(`mutation($p:ID!,$i:ID!,$f:ID!,$o:String!){updateProjectV2ItemFieldValue(input:{projectId:$p,itemId:$i,fieldId:$f,value:{singleSelectOptionId:$o}}){projectV2Item{id}}}`,
+                    { p: PROJECT_ID, i: a.addProjectV2ItemById.item.id, f: STATUS_FIELD, o: BACKLOG });
+                  added++;
+                }
+              } catch (e) {
+                failed++;
+                core.warning(`one issue failed: ${e.status || ''} ${String(e.message).slice(0, 80)}`);
+              }
+            }
+            core.info(`scanned ${found.length} · added to board ${added} · labelled ${labelled} · failed ${failed}`);
+            if (failed) core.setFailed(`${failed} issue(s) failed`);
