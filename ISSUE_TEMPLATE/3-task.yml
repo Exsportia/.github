@@ -1,0 +1,30 @@
+name: Task
+description: Work that isn't a bug or a user story (setup, chore, research, tech debt)
+type: Task
+labels: [needs-triage]
+body:
+  - type: dropdown
+    id: surface
+    attributes:
+      label: App
+      multiple: true
+      options:
+        - VMS (legacy venue admin)
+        - MMS (Muay VMS)
+        - WBA (legacy web booking)
+        - MBA (MySportia web)
+        - RN (legacy mobile)
+        - RNM (MySportia mobile)
+        - CHI (check-in kiosk)
+        - Server / API
+        - Infra / other
+  - type: textarea
+    id: what
+    attributes:
+      label: What and why
+    validations:
+      required: true
+  - type: textarea
+    id: done
+    attributes:
+      label: Done when

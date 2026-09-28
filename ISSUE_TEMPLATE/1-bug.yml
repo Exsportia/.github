@@ -1,0 +1,82 @@
+name: Bug
+description: Something is broken or behaves wrong
+type: Bug
+labels: [needs-triage]
+body:
+  - type: dropdown
+    id: surface
+    attributes:
+      label: App
+      options:
+        - VMS (legacy venue admin)
+        - MMS (Muay VMS)
+        - WBA (legacy web booking)
+        - MBA (MySportia web)
+        - RN (legacy mobile)
+        - RNM (MySportia mobile)
+        - CHI (check-in kiosk)
+        - Server / API
+        - Infra / other
+    validations:
+      required: true
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      options:
+        - Critical — system down, data loss, money wrong
+        - Major — main flow broken, no workaround
+        - Medium — broken with a workaround
+        - Low — cosmetic or minor
+    validations:
+      required: true
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Kind
+      options:
+        - Logic / data
+        - UI / layout
+  - type: dropdown
+    id: environment
+    attributes:
+      label: Where
+      multiple: true
+      options:
+        - dev
+        - staging
+        - preprod
+        - production
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version or build
+      placeholder: e.g. 1.121.1, RNBA 1.9.36 (5830)
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open …
+        2. Click …
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: Screenshots, video, logs, request ids, venue / booking ids.

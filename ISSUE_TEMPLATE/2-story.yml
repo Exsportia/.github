@@ -1,0 +1,43 @@
+name: Story
+description: New behaviour for a user
+type: Story
+labels: [needs-triage]
+body:
+  - type: dropdown
+    id: surface
+    attributes:
+      label: App
+      multiple: true
+      options:
+        - VMS (legacy venue admin)
+        - MMS (Muay VMS)
+        - WBA (legacy web booking)
+        - MBA (MySportia web)
+        - RN (legacy mobile)
+        - RNM (MySportia mobile)
+        - CHI (check-in kiosk)
+        - Server / API
+        - Infra / other
+    validations:
+      required: true
+  - type: textarea
+    id: story
+    attributes:
+      label: Story
+      placeholder: As a venue owner, I want … so that …
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Done when
+      placeholder: |
+        - [ ] …
+        - [ ] …
+    validations:
+      required: true
+  - type: textarea
+    id: links
+    attributes:
+      label: Design, spec, decision
+      description: Figma, spec path, D-number.
