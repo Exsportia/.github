@@ -3,6 +3,14 @@ description: Something is broken or behaves wrong
 type: Bug
 labels: [needs-triage]
 body:
+  # Guidance only — markdown blocks are not copied into the issue.
+  - type: markdown
+    attributes:
+      value: |
+        **Title:** `[App] Area; Subarea - Short description (Modifier)`, e.g. `[VMS] Inventory; Sell - No loader on the payment modal Confirm button (Mobile)`.
+        File it in the repo of the app where you see the bug. One issue per fix: a bug in several apps that needs a separate fix in each → one parent issue + a sub-issue per app.
+        **Never** put a real customer's login, production passwords or anything founder-only into an issue — test accounts only.
+  # The triage Action reads the App / Severity / Kind / Where answers — keep these four labels unchanged.
   - type: dropdown
     id: surface
     attributes:
@@ -55,9 +63,24 @@ body:
       label: Version or build
       placeholder: e.g. 1.121.1, RNBA 1.9.36 (5830)
   - type: textarea
+    id: credentials
+    attributes:
+      label: Credentials
+      description: The test account(s) needed to reproduce, one per line. Test accounts only.
+      placeholder: "VMS staging: fintest@rover.info / <password>"
+  - type: textarea
+    id: preconditions
+    attributes:
+      label: Preconditions
+      description: The minimum setup before the steps (venue, contact, booking, code…), not the login.
+      placeholder: |
+        - Venue with an area and a published service
+        - Promo code QA15CLASS active
+  - type: textarea
     id: steps
     attributes:
       label: Steps to reproduce
+      description: Numbered, one action per line. Start from a direct URL if the bug is mid-flow.
       placeholder: |
         1. Open …
         2. Click …
@@ -75,8 +98,21 @@ body:
       label: Actual
     validations:
       required: true
+  - type: dropdown
+    id: repro
+    attributes:
+      label: Repro rate
+      options:
+        - Always
+        - Sometimes
+        - Rare
   - type: textarea
     id: evidence
     attributes:
       label: Evidence
-      description: Screenshots, video, logs, request ids, venue / booking ids.
+      description: Screenshots, video, logs, request ids, venue / booking ids. Drag files in here.
+  - type: textarea
+    id: notes
+    attributes:
+      label: Special notes
+      description: Related paths also affected, a workaround, linked issues or the Jira key. Leave empty if none.

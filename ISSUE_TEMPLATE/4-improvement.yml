@@ -1,0 +1,65 @@
+name: Improvement
+description: Something works, but should work better (UX, wording, layout, performance)
+type: Improvement
+labels: [needs-triage]
+body:
+  # Guidance only — markdown blocks are not copied into the issue.
+  - type: markdown
+    attributes:
+      value: |
+        **Title:** `[App] Area; Subarea - What should change`, e.g. `[VMS] Inventory - Display stock item name in tip`.
+        An improvement changes something that already works. Broken → **Bug**. New behaviour or a new screen → **Story**.
+  # The triage Action reads the App answer — keep this label unchanged.
+  - type: dropdown
+    id: surface
+    attributes:
+      label: App
+      multiple: true
+      options:
+        - VMS (legacy venue admin)
+        - MMS (Muay VMS)
+        - WBA (legacy web booking)
+        - MBA (MySportia web)
+        - RN (legacy mobile)
+        - RNM (MySportia mobile)
+        - CHI (check-in kiosk)
+        - Server / API
+        - Infra / other
+    validations:
+      required: true
+  - type: textarea
+    id: story
+    attributes:
+      label: Improvement
+      description: Who wants it, what should change, and why.
+      placeholder: |
+        As a VMS manager
+        I want to see the full stock item name in a tooltip
+        So that I can tell long item names apart
+    validations:
+      required: true
+  - type: textarea
+    id: current
+    attributes:
+      label: Today
+      description: How it works now. Add a screenshot if it helps.
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Done when
+      description: One check per line. Not a table.
+      placeholder: |
+        - [ ] …
+        - [ ] …
+    validations:
+      required: true
+  - type: textarea
+    id: links
+    attributes:
+      label: Design, spec, decision
+      description: Figma, spec path, D-number, related issue or Jira key.
+  - type: textarea
+    id: notes
+    attributes:
+      label: Additional information
+      description: Who asked for it (a venue, a founder), edge cases, anything else.
