@@ -31,10 +31,12 @@ body:
     id: severity
     attributes:
       label: Severity
+      description: Pick the highest that fits. When unsure, go one level up and let triage lower it.
       options:
-        - Critical — system down, data loss, money wrong
-        - Major — main flow broken, no workaround
-        - Medium — broken with a workaround
+        - Blocker — money wrong or a venue cannot operate, no workaround
+        - Critical — data loss or a core flow broken for many users, no workaround
+        - Major — main feature broken for some users, or a workaround exists
+        - Medium — feature misbehaves, the flow still completes
         - Low — cosmetic or minor
     validations:
       required: true
