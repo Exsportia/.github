@@ -1,0 +1,103 @@
+# A bug closed by a merged PR moves to "Ready for testing" on Project #2, gets `needs-qa` and one comment
+# naming the PR. Without this, "Fixes #n" closes the bug on merge into develop and nobody moves it, so it
+# drops out of every QA queue (49 bugs on 17 Oct; qa-process guides/bug-lifecycle.md). Only QA sets Done.
+#
+# Skips: issues that are not bugs (no sev/* or bug/* label and Issue Type is not Bug), issues closed by hand
+# or as not planned, and issues already in Ready for testing, In Testing or Done.
+# Idempotent: it looks back 3 hours every run. Backfill: Run workflow with `since` = YYYY-MM-DD.
+#
+# THIS REPO IS PUBLIC, SO ITS LOGS ARE PUBLIC: log counts only, never titles, bodies or repo names
+# of private issues.
+name: Retest on merge
+
+on:
+  schedule:
+    - cron: "5,20,35,50 * * * *"
+  workflow_dispatch:
+    inputs:
+      since:
+        description: Backfill from this date (YYYY-MM-DD); empty = last 3 hours
+        required: false
+        default: ""
+      dry_run:
+        description: Count only, change nothing
+        type: boolean
+        default: false
+
+permissions: {}
+
+concurrency:
+  group: retest-on-merge
+  cancel-in-progress: false
+
+jobs:
+  move:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - id: app
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ vars.EXSPORTIA_OPS_APP_ID }}
+          private-key: ${{ secrets.EXSPORTIA_OPS_APP_KEY }}
+          owner: Exsportia
+
+      - uses: actions/github-script@v7
+        env:
+          SINCE: ${{ inputs.since }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        with:
+          github-token: ${{ steps.app.outputs.token }}
+          script: |
+            const PROJECT_ID = 'PVT_kwDOA2Phgc4Bk7Ho';
+            const STATUS_FIELD = 'PVTSSF_lADOA2Phgc4Bk7Hozhjp35M';
+            const READY = '18a87477';
+            const LEAVE = ['Ready for testing', 'In Testing', 'Done'];
+            const dry = process.env.DRY_RUN === 'true';
+
+            const input = (process.env.SINCE || '').trim();
+            if (input && !/^\d{4}-\d{2}-\d{2}$/.test(input)) return core.setFailed('since must be YYYY-MM-DD');
+            const since = input || new Date(Date.now() - 3 * 3600e3).toISOString().slice(0, 19) + 'Z';
+            const found = await github.paginate(github.rest.search.issuesAndPullRequests, {
+              q: `org:Exsportia is:issue is:closed reason:completed closed:>=${since}`, per_page: 100,
+            });
+
+            const Q = `query($id:ID!){node(id:$id){... on Issue{
+              issueType{name} labels(first:30){nodes{name}}
+              timelineItems(itemTypes:[CLOSED_EVENT],last:1){nodes{... on ClosedEvent{closer{__typename
+                ... on PullRequest{number url merged baseRefName repository{nameWithOwner}}}}}}
+              projectItems(first:20){nodes{id project{id}
+                status:fieldValueByName(name:"Status"){... on ProjectV2ItemFieldSingleSelectValue{name}}}}}}}`;
+
+            let notBug = 0, notByPr = 0, already = 0, moved = 0, failed = 0;
+            for (const issue of found) {
+              try {
+                const [owner, repo] = issue.repository_url.split('/').slice(-2);
+                const n = (await github.graphql(Q, { id: issue.node_id })).node;
+                const labels = n.labels.nodes.map(l => l.name);
+                if (!labels.some(l => l.startsWith('sev/') || l.startsWith('bug/')) && n.issueType?.name !== 'Bug') { notBug++; continue; }
+                const pr = n.timelineItems.nodes[0]?.closer;
+                if (pr?.__typename !== 'PullRequest' || !pr.merged) { notByPr++; continue; }
+                let item = n.projectItems.nodes.find(i => i.project.id === PROJECT_ID);
+                if (item && LEAVE.includes(item.status?.name)) { already++; continue; }
+                if (dry) { moved++; continue; }
+
+                if (!item) item = (await github.graphql(`mutation($p:ID!,$c:ID!){addProjectV2ItemById(input:{projectId:$p,contentId:$c}){item{id}}}`,
+                  { p: PROJECT_ID, c: issue.node_id })).addProjectV2ItemById.item;
+                await github.graphql(`mutation($p:ID!,$i:ID!,$f:ID!,$o:String!){updateProjectV2ItemFieldValue(input:{projectId:$p,itemId:$i,fieldId:$f,value:{singleSelectOptionId:$o}}){projectV2Item{id}}}`,
+                  { p: PROJECT_ID, i: item.id, f: STATUS_FIELD, o: READY });
+                if (!labels.includes('needs-qa')) await github.rest.issues.addLabels({ owner, repo, issue_number: issue.number, labels: ['needs-qa'] });
+                await github.rest.issues.createComment({ owner, repo, issue_number: issue.number, body: [
+                  '<!-- retest-on-merge -->',
+                  `Fix merged: ${pr.url} into \`${pr.baseRefName}\`. Moved to **Ready for testing** (was ${item.status?.name || 'not on the board'}).`,
+                  '',
+                  'QA retests once the fix is on a tier (`/retest-queue` in qa-process lists it with the tiers it has reached). The issue stays closed; the board Status is what counts, and only QA sets Done.',
+                ].join('\n') });
+                moved++;
+              } catch (e) {
+                failed++;
+                core.warning(`one issue failed: ${e.status || ''}`);
+              }
+            }
+            core.info(`scanned ${found.length} · not a bug ${notBug} · not closed by a merged PR ${notByPr} · already in QA or Done ${already} · ${dry ? 'would move' : 'moved'} ${moved} · failed ${failed}`);
+            if (failed) core.setFailed(`${failed} issue(s) failed`);
