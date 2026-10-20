@@ -36,6 +36,8 @@ jobs:
             const PROJECT_ID = 'PVT_kwDOA2Phgc4Bk7Ho';
             const STATUS_FIELD = 'PVTSSF_lADOA2Phgc4Bk7Hozhjp35M';
             const BACKLOG = '73dd21df';
+            const PRIORITY_FIELD = 'PVTSSF_lADOA2Phgc4Bk7Hozhjp9YQ';
+            const URGENT = '17d95a5f';
 
             const REPO_SURFACE = {
               'exsportia-admin': 'surface/vms', 'muay-vms': 'surface/mms', 'web-booking-app': 'surface/wba',
@@ -48,7 +50,8 @@ jobs:
               ['RNM (', 'surface/rnm'], ['RN (', 'surface/rn'], ['CHI (', 'surface/chi'],
               ['Server / API', 'surface/server'], ['Infra / other', 'surface/infra'],
             ];
-            const SEV = { Critical: 'sev/critical', Major: 'sev/major', Medium: 'sev/medium', Low: 'sev/low' };
+            // D439 severities (qa-process guides/bug-lifecycle.md). A Blocker is P1: Priority Urgent.
+            const SEV = { Blocker: 'sev/blocker', Critical: 'sev/critical', Major: 'sev/major', Medium: 'sev/medium', Low: 'sev/low' };
 
             // Answer under a form heading ("### App" … next "###").
             const section = (body, heading) => {
@@ -86,13 +89,18 @@ jobs:
                   labelled++;
                 }
 
-                const r = await github.graphql(`query($id:ID!){node(id:$id){... on Issue{projectItems(first:20){nodes{id project{id}}}}}}`, { id: issue.node_id });
-                if (!r.node.projectItems.nodes.some(n => n.project.id === PROJECT_ID)) {
+                const setOption = (itemId, field, option) => github.graphql(`mutation($p:ID!,$i:ID!,$f:ID!,$o:String!){updateProjectV2ItemFieldValue(input:{projectId:$p,itemId:$i,fieldId:$f,value:{singleSelectOptionId:$o}}){projectV2Item{id}}}`,
+                  { p: PROJECT_ID, i: itemId, f: field, o: option });
+                const r = await github.graphql(`query($id:ID!){node(id:$id){... on Issue{projectItems(first:20){nodes{id project{id} priority:fieldValueByName(name:"Priority"){... on ProjectV2ItemFieldSingleSelectValue{name}}}}}}}`, { id: issue.node_id });
+                let item = r.node.projectItems.nodes.find(n => n.project.id === PROJECT_ID);
+                if (!item) {
                   const a = await github.graphql(`mutation($p:ID!,$c:ID!){addProjectV2ItemById(input:{projectId:$p,contentId:$c}){item{id}}}`, { p: PROJECT_ID, c: issue.node_id });
-                  await github.graphql(`mutation($p:ID!,$i:ID!,$f:ID!,$o:String!){updateProjectV2ItemFieldValue(input:{projectId:$p,itemId:$i,fieldId:$f,value:{singleSelectOptionId:$o}}){projectV2Item{id}}}`,
-                    { p: PROJECT_ID, i: a.addProjectV2ItemById.item.id, f: STATUS_FIELD, o: BACKLOG });
+                  item = { id: a.addProjectV2ItemById.item.id, priority: null };
+                  await setOption(item.id, STATUS_FIELD, BACKLOG);
                   added++;
                 }
+                // A Blocker from the form lands with Priority Urgent. Only an empty Priority: one a person set stays.
+                if (sev === 'Blocker' && !item.priority?.name) await setOption(item.id, PRIORITY_FIELD, URGENT);
               } catch (e) {
                 failed++;
                 core.warning(`one issue failed: ${e.status || ''} ${String(e.message).slice(0, 80)}`);
